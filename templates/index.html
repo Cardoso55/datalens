@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>DataLens</title>
+</head>
+<body>
+  <!-- Placeholder temporário: a interface SaaS de verdade (tema escuro,
+       cards de KPI, gráficos Plotly) entra na próxima etapa. Este HTML
+       só existe para validar o fluxo de upload -> /analyze de ponta a ponta. -->
+  <h1>DataLens</h1>
+  <form id="upload-form">
+    <input type="file" name="file" accept=".csv" required>
+    <button type="submit">Analisar</button>
+  </form>
+  <pre id="result"></pre>
+
+  <script>
+    document.getElementById("upload-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const response = await fetch("/analyze", { method: "POST", body: formData });
+      const data = await response.json();
+      document.getElementById("result").textContent = JSON.stringify(data, null, 2);
+    });
+  </script>
+</body>
+</html>
