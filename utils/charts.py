@@ -198,10 +198,19 @@ class ChartGenerator:
         # 1) Categóricas -> barras (e pizza quando a cardinalidade é baixa,
         #    porque pizza com 20 fatias não comunica nada).
         bar_count, pie_count = 0, 0
+        total_rows = len(self.df)
         for col in self.categorical_cols:
             cardinality = self._cardinality(col)
             if cardinality < 2:
                 continue  # coluna constante, não gera gráfico
+
+            # Coluna com quase um valor único por linha (ex.: ID_Pedido,
+            # CPF, protocolo) se comporta como identificador, não como
+            # categoria — um gráfico de barras aqui só mostra barras de
+            # altura 1 e não comunica nada.
+            looks_like_id = total_rows >= 10 and cardinality >= total_rows * 0.9
+            if looks_like_id:
+                continue
 
             if bar_count < MAX_BAR_CHARTS:
                 charts.append(self.bar_chart(col))

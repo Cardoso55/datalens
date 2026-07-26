@@ -1,28 +1,134 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-  <meta charset="UTF-8">
-  <title>DataLens</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DataLens — Análise automática de CSV</title>
+<meta name="description" content="Envie um CSV e receba estatísticas, gráficos e um resumo em linguagem natural, gerados automaticamente.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-  <!-- Placeholder temporário: a interface SaaS de verdade (tema escuro,
-       cards de KPI, gráficos Plotly) entra na próxima etapa. Este HTML
-       só existe para validar o fluxo de upload -> /analyze de ponta a ponta. -->
-  <h1>DataLens</h1>
-  <form id="upload-form">
-    <input type="file" name="file" accept=".csv" required>
-    <button type="submit">Analisar</button>
-  </form>
-  <pre id="result"></pre>
 
-  <script>
-    document.getElementById("upload-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const response = await fetch("/analyze", { method: "POST", body: formData });
-      const data = await response.json();
-      document.getElementById("result").textContent = JSON.stringify(data, null, 2);
-    });
-  </script>
+<div class="noise-overlay" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <div class="brand">
+      <svg class="brand__mark" viewBox="0 0 40 40" aria-hidden="true">
+        <circle class="ring ring--outer" cx="20" cy="20" r="17"></circle>
+        <circle class="ring ring--inner" cx="20" cy="20" r="10"></circle>
+        <line x1="20" y1="1" x2="20" y2="7"></line>
+        <line x1="20" y1="33" x2="20" y2="39"></line>
+        <line x1="1" y1="20" x2="7" y2="20"></line>
+        <line x1="33" y1="20" x2="39" y2="20"></line>
+      </svg>
+      <span class="brand__name">DataLens</span>
+    </div>
+    <p class="topbar__tagline">análise automática de CSV</p>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============================= HERO / UPLOAD ============================= -->
+  <section class="hero" id="hero-section">
+    <p class="eyebrow">Solte um arquivo. Receba uma análise.</p>
+    <h1 class="hero__title">Seu CSV,<br><span class="hero__title-accent">em foco.</span></h1>
+    <p class="hero__subtitle">
+      Envie um CSV e o DataLens identifica os tipos de coluna, calcula estatísticas,
+      escolhe os gráficos certos e escreve um resumo em português — sem nenhuma configuração.
+    </p>
+
+    <div class="dropzone" id="dropzone" tabindex="0" role="button"
+         aria-label="Selecionar ou arrastar um arquivo CSV para análise">
+      <svg class="dropzone__aperture" viewBox="0 0 200 200" aria-hidden="true">
+        <circle class="aperture-ring aperture-ring--1" cx="100" cy="100" r="88"></circle>
+        <circle class="aperture-ring aperture-ring--2" cx="100" cy="100" r="70"></circle>
+        <g class="aperture-blades">
+          <path class="blade" d="M100 30 L130 55 L120 90 L80 90 L70 55 Z"></path>
+          <path class="blade" d="M170 100 L145 130 L110 120 L110 80 L145 70 Z" transform="rotate(72 100 100)"></path>
+          <path class="blade" d="M170 100 L145 130 L110 120 L110 80 L145 70 Z" transform="rotate(144 100 100)"></path>
+          <path class="blade" d="M170 100 L145 130 L110 120 L110 80 L145 70 Z" transform="rotate(216 100 100)"></path>
+          <path class="blade" d="M170 100 L145 130 L110 120 L110 80 L145 70 Z" transform="rotate(288 100 100)"></path>
+        </g>
+      </svg>
+
+      <div class="dropzone__content">
+        <p class="dropzone__label">Arraste um arquivo <span class="mono">.csv</span> aqui</p>
+        <p class="dropzone__or">ou</p>
+        <button type="button" class="btn btn--primary" id="browse-btn">Selecionar arquivo</button>
+        <input type="file" id="file-input" accept=".csv" hidden>
+        <p class="dropzone__hint">Tamanho máximo: 20MB · nada fica salvo no servidor</p>
+      </div>
+
+      <div class="dropzone__processing" id="processing-state" hidden>
+        <ul class="stepper" id="stepper">
+          <li class="stepper__step" data-step="read"><span class="stepper__dot"></span>Lendo o arquivo</li>
+          <li class="stepper__step" data-step="stats"><span class="stepper__dot"></span>Calculando estatísticas</li>
+          <li class="stepper__step" data-step="charts"><span class="stepper__dot"></span>Gerando gráficos</li>
+          <li class="stepper__step" data-step="insights"><span class="stepper__dot"></span>Escrevendo o resumo</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="error-message" id="error-message" role="alert" hidden></p>
+  </section>
+
+  <!-- ============================= RESULTS ============================= -->
+  <section class="results" id="results-section" hidden>
+
+    <div class="results__bar">
+      <div class="results__file">
+        <span class="results__file-label">Arquivo analisado</span>
+        <span class="results__file-name mono" id="result-filename">—</span>
+      </div>
+      <button type="button" class="btn btn--ghost" id="reset-btn">Nova análise</button>
+    </div>
+
+    <!-- Insight de IA -->
+    <article class="insight-card" id="insight-card">
+      <div class="insight-card__mark" aria-hidden="true">“</div>
+      <p class="insight-card__text" id="insight-text">—</p>
+      <span class="insight-card__badge" id="insight-badge">—</span>
+    </article>
+
+    <!-- KPIs -->
+    <div class="kpi-grid" id="kpi-grid" aria-label="Indicadores gerais do dataset"></div>
+
+    <!-- Qualidade dos dados -->
+    <section class="panel" id="quality-panel">
+      <h2 class="panel__title">Qualidade dos dados</h2>
+      <div class="quality-grid" id="quality-grid"></div>
+    </section>
+
+    <!-- Gráficos -->
+    <section class="panel">
+      <h2 class="panel__title">Visualizações</h2>
+      <div class="chart-grid" id="chart-grid"></div>
+    </section>
+
+    <!-- Preview -->
+    <section class="panel">
+      <h2 class="panel__title">Pré-visualização dos dados</h2>
+      <div class="table-wrap">
+        <table class="preview-table" id="preview-table"></table>
+      </div>
+    </section>
+
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <p>DataLens — projeto de portfólio construído com Python, Flask, Pandas e Plotly.</p>
+</footer>
+
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
